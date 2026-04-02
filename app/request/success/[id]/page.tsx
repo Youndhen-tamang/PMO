@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle2, Download, Share2, ArrowLeft, Printer, Loader2 } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
+import { CheckCircle2, Download, ArrowLeft, Printer, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function RequestSuccessPage() {
@@ -11,15 +11,15 @@ export default function RequestSuccessPage() {
   const router = useRouter();
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchRequest() {
       try {
         const response = await fetch(`/api/requests/${id}`);
         if (!response.ok) throw new Error("Not found");
-        const data = await response.json();
-        setRequest(data);
-      } catch (error) {
+        setRequest(await response.json());
+      } catch {
         toast.error("Failed to load request details");
         router.push("/request");
       } finally {
@@ -40,24 +40,20 @@ export default function RequestSuccessPage() {
   const verificationUrl = `${window.location.origin}/verify/${id}`;
 
   const handleDownload = () => {
-    const svg = document.querySelector("svg");
-    if (!svg) return;
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx?.drawImage(img, 0, 0);
-      const pngFile = canvas.toDataURL("image/png");
-      const downloadLink = document.createElement("a");
-      downloadLink.download = `visitor-pass-${id}.png`;
-      downloadLink.href = pngFile;
-      downloadLink.click();
-    };
-    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+    const canvas = qrRef.current?.querySelector("canvas");
+    if (!canvas) {
+      toast.error("QR code not ready yet");
+      return;
+    }
+    const url = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = `visitor-pass-${id}.png`;
+    link.href = url;
+    link.click();
+    toast.success("QR code downloaded!");
   };
+
+  const handlePrint = () => window.print();
 
   return (
     <div className="container max-w-xl px-4 py-12 mx-auto">
@@ -69,29 +65,33 @@ export default function RequestSuccessPage() {
         </div>
 
         <h1 className="mb-2 text-2xl font-bold text-slate-900 sm:text-3xl">Submission Successful!</h1>
-        <p className="mb-8 text-slate-500">Your visitor request has been submitted. Please save this QR code for verification at the entrance.</p>
+        <p className="mb-8 text-slate-500 text-sm">
+          Your request is <strong>pending admin approval</strong>. Save this QR code — show it at the entrance after approval.
+        </p>
 
-        <div className="inline-block p-6 mb-8 bg-slate-50 rounded-2xl border border-slate-100">
-          <QRCodeSVG
+        {/* QR Code — canvas-based for reliable download */}
+        <div ref={qrRef} className="inline-block p-6 mb-8 bg-slate-50 rounded-2xl border border-slate-100">
+          <QRCodeCanvas
             value={verificationUrl}
             size={200}
             level="H"
             includeMargin={true}
-            className="mx-auto"
           />
-          <div className="mt-4 text-sm font-mono text-slate-500 select-all">
+          <div className="mt-3 text-xs font-mono text-slate-500 select-all">
             ID: {id}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <div className="p-4 text-left bg-slate-50 rounded-xl border border-slate-100">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Visitor</p>
-            <p className="font-semibold text-slate-900">{request.name}</p>
+            <p className="font-semibold text-slate-900">{request?.name}</p>
           </div>
           <div className="p-4 text-left bg-slate-50 rounded-xl border border-slate-100">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Date</p>
-            <p className="font-semibold text-slate-900">{new Date(request.visitDate).toLocaleDateString()}</p>
+            <p className="font-semibold text-slate-900">
+              {request?.visitDate && new Date(request.visitDate).toLocaleDateString()}
+            </p>
           </div>
         </div>
 
@@ -103,21 +103,18 @@ export default function RequestSuccessPage() {
             <Download className="w-4 h-4" />
             Download QR Pass
           </button>
-          <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95">
-              <Printer className="w-4 h-4" />
-              Print
-            </button>
-            <button className="flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all active:scale-95">
-              <Share2 className="w-4 h-4" />
-              Share
-            </button>
-          </div>
+          <button
+            onClick={handlePrint}
+            className="flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
+          >
+            <Printer className="w-4 h-4" />
+            Print
+          </button>
         </div>
 
         <button
-          onClick={() => router.push("/request")}
-          className="mt-8 text-sm font-medium text-slate-500 hover:text-blue-600 flex items-center justify-center gap-2 mx-auto"
+          onClick={() => router.push("/")}
+          className="mt-6 text-sm font-medium text-slate-500 hover:text-blue-600 flex items-center justify-center gap-2 mx-auto"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Home

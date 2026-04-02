@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model VisitorRequest {
@@ -18,7 +18,8 @@ model VisitorRequest {
   visitDate       DateTime
   phone           String
   email           String
-  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CHECKED_IN, CHECKED_OUT
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CHECKED_IN, COMPLETED
+  documentUrl     String?
   qrCode          String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

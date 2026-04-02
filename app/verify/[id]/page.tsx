@@ -1,167 +1,213 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { User, Building, MessageSquare, Calendar, Phone, Mail, ShieldCheck, ShieldAlert, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { CheckCircle, XCircle, Clock, Loader2, Search, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+
+const STATUS_CONFIG: Record<string, { label: string; icon: any; bg: string; text: string; border: string; subtitle: string }> = {
+  APPROVED: {
+    label: "Access Granted",
+    icon: CheckCircle,
+    bg: "bg-green-50",
+    text: "text-green-700",
+    border: "border-green-200",
+    subtitle: "This visitor is approved to enter.",
+  },
+  PENDING: {
+    label: "Pending Approval",
+    icon: Clock,
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+    border: "border-amber-200",
+    subtitle: "This request is awaiting admin approval.",
+  },
+  CHECKED_IN: {
+    label: "Currently Checked In",
+    icon: ShieldCheck,
+    bg: "bg-blue-50",
+    text: "text-blue-700",
+    border: "border-blue-200",
+    subtitle: "Visitor has already been checked in.",
+  },
+  COMPLETED: {
+    label: "Visit Completed",
+    icon: AlertTriangle,
+    bg: "bg-slate-50",
+    text: "text-slate-600",
+    border: "border-slate-200",
+    subtitle: "This visit pass has been used and is no longer valid.",
+  },
+  REJECTED: {
+    label: "Access Denied",
+    icon: XCircle,
+    bg: "bg-red-50",
+    text: "text-red-700",
+    border: "border-red-200",
+    subtitle: "This visitor request has been rejected.",
+  },
+};
 
 export default function VerificationPage() {
   const { id } = useParams();
-  const router = useRouter();
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    async function fetchRequest() {
-      try {
-        const response = await fetch(`/api/requests/${id}`);
-        if (!response.ok) throw new Error("Not found");
-        const data = await response.json();
-        setRequest(data);
-      } catch (error) {
-        toast.error("Invalid QR Code or Request ID");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchRequest();
+    if (id) fetchById(id as string);
   }, [id]);
 
-  async function handleAction(status: string) {
-    setVerifying(true);
+  async function fetchById(requestId: string) {
+    setLoading(true);
     try {
-      const response = await fetch(`/api/requests/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-
-      if (!response.ok) throw new Error("Action failed");
-
-      const updated = await response.json();
-      setRequest(updated);
-      toast.success(status === "CHECKED_IN" ? "Visitor Checked In" : "Entry Rejected");
-    } catch (error) {
-      toast.error("Failed to update status");
+      const res = await fetch(`/api/requests/${requestId}`);
+      if (!res.ok) throw new Error("Not found");
+      setRequest(await res.json());
+    } catch {
+      setRequest(null);
     } finally {
-      setVerifying(false);
+      setLoading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/requests?q=${encodeURIComponent(searchQuery.trim())}`);
+      const data = await res.json();
+      
+      if (data.length > 0) {
+        // Prioritize: APPROVED > PENDING > others, then by date (already DESC from API)
+        const prioritized = data.sort((a: any, b: any) => {
+          const statusOrder: Record<string, number> = { APPROVED: 0, PENDING: 1, CHECKED_IN: 2, COMPLETED: 3, REJECTED: 4 };
+          const orderA = statusOrder[a.status] ?? 99;
+          const orderB = statusOrder[b.status] ?? 99;
+          if (orderA !== orderB) return orderA - orderB;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        
+        setRequest(prioritized[0]);
+        if (data.length > 1) {
+          toast.info(`Found ${data.length} applications. Showing the most relevant one.`);
+        }
+      } else {
+        toast.error("No record found for that ID or citizenship number.");
+        setRequest(null);
+      }
+    } catch {
+      toast.error("Search failed. Try again.");
+    } finally {
+      setSearching(false);
+    }
   }
 
-  if (!request) {
-    return (
-      <div className="container max-w-xl px-4 py-24 mx-auto text-center">
-        <div className="flex justify-center mb-6">
-          <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full">
-            <ShieldAlert className="w-8 h-8 text-red-600" />
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold mb-2">Invalid Pass</h1>
-        <p className="text-slate-500 mb-8">This QR code is invalid or has expired.</p>
-        <button
-          onClick={() => router.push("/security/dashboard")}
-          className="px-6 py-2 bg-slate-900 text-white rounded-lg font-medium"
-        >
-          Go to Dashboard
-        </button>
-      </div>
-    );
+  async function handleCheckIn() {
+    if (!request) return;
+    setCheckingIn(true);
+    try {
+      const res = await fetch(`/api/requests/${request.requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CHECKED_IN" }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Visitor checked in successfully!");
+      setRequest((prev: any) => ({ ...prev, status: "CHECKED_IN" }));
+    } catch {
+      toast.error("Check-in failed.");
+    } finally {
+      setCheckingIn(false);
+    }
   }
 
-  const isAlreadyCheckedIn = request.status === "CHECKED_IN";
-  const isRejected = request.status === "REJECTED";
+  const config = request ? STATUS_CONFIG[request.status] ?? STATUS_CONFIG.REJECTED : null;
+  const StatusIcon = config?.icon;
 
   return (
-    <div className="container max-w-xl px-4 py-12 mx-auto">
-      <div className="p-6 bg-white border rounded-2xl shadow-sm sm:p-10">
-        <div className="flex items-center justify-between mb-8 pb-6 border-b">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Security Verification</h1>
-            <p className="text-sm text-slate-500 font-mono">REQ: {id}</p>
+    <div className="container max-w-lg px-4 py-12 mx-auto">
+      {/* Search Box */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-center mb-2">Gate Verification</h1>
+        <p className="text-slate-500 text-sm text-center mb-6">Scan QR or search by Request ID / Citizenship Number</p>
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Enter Request ID or Citizenship No..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
           </div>
-          <div className={cn(
-            "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
-            request.status === "PENDING" && "bg-amber-100 text-amber-700",
-            request.status === "CHECKED_IN" && "bg-green-100 text-green-700",
-            request.status === "REJECTED" && "bg-red-100 text-red-700"
-          )}>
-            {request.status.replace("_", " ")}
-          </div>
+          <button
+            type="submit"
+            disabled={searching}
+            className="px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-500 disabled:opacity-50 transition-colors"
+          >
+            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+          </button>
+        </form>
+      </div>
+
+      {/* Result */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
         </div>
-
-        <div className="space-y-6 mb-10">
-          <DetailItem icon={<User />} label="Visitor Name" value={request.name} />
-          <DetailItem icon={<Building />} label="Organization" value={request.organization} />
-          <DetailItem icon={<Building />} label="Citizenship / ID" value={request.citizenshipNo} />
-          <DetailItem icon={<MessageSquare />} label="Purpose" value={request.purpose} />
-          <DetailItem icon={<User />} label="Person to Meet" value={request.personToMeet} />
-          <DetailItem icon={<Calendar />} label="Visit Date" value={new Date(request.visitDate).toLocaleDateString()} />
-          <DetailItem icon={<Phone />} label="Contact Number" value={request.phone} />
+      ) : !request ? (
+        <div className="text-center py-12 border rounded-2xl bg-white">
+          <XCircle className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-500">No visitor found</p>
+          <p className="text-xs text-slate-400 mt-1">Search by ID or citizenship number above</p>
         </div>
-
-        {!isAlreadyCheckedIn && !isRejected ? (
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => handleAction("REJECTED")}
-              disabled={verifying}
-              className="flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-red-700 bg-red-50 border border-red-100 rounded-xl hover:bg-red-100 transition-all active:scale-95 disabled:opacity-50"
-            >
-              <XCircle className="w-5 h-5" />
-              Reject Entry
-            </button>
-            <button
-              onClick={() => handleAction("CHECKED_IN")}
-              disabled={verifying}
-              className="flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-white bg-green-600 rounded-xl hover:bg-green-500 shadow-sm transition-all active:scale-95 disabled:opacity-50"
-            >
-              <CheckCircle className="w-5 h-5" />
-              Approve Entry
-            </button>
+      ) : (
+        <div className={`rounded-2xl border-2 ${config?.border} ${config?.bg} p-6`}>
+          {/* Status Badge */}
+          <div className={`flex items-center gap-3 mb-5 ${config?.text}`}>
+            {StatusIcon && <StatusIcon className="w-8 h-8" />}
+            <div>
+              <h2 className="text-xl font-bold">{config?.label}</h2>
+              <p className="text-sm opacity-80">{config?.subtitle}</p>
+            </div>
           </div>
-        ) : (
-          <div className={cn(
-            "p-4 rounded-xl border text-center flex flex-col items-center gap-2",
-            isAlreadyCheckedIn ? "bg-green-50 border-green-100 text-green-800" : "bg-red-50 border-red-100 text-red-800"
-          )}>
-            {isAlreadyCheckedIn ? <CheckCircle className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
-            <span className="font-bold">{isAlreadyCheckedIn ? "Already Checked In" : "Entry Rejected"}</span>
-            <p className="text-sm opacity-80">Processed at {new Date(request.updatedAt).toLocaleString()}</p>
+
+          {/* Visitor Info */}
+          <div className="bg-white rounded-xl border p-4 space-y-2.5 mb-5">
+            {[
+              ["Name", request.name],
+              ["Citizenship / ID", request.citizenshipNo],
+              ["Organization", request.organization],
+              ["Purpose", request.purpose],
+              ["Person to Meet", request.personToMeet],
+              ["Visit Date", new Date(request.visitDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })],
+              ["Request ID", request.requestId],
+            ].map(([label, value]) => (
+              <div key={label} className="flex gap-2 text-sm">
+                <span className="text-slate-400 w-32 shrink-0">{label}</span>
+                <span className="font-medium text-slate-800">{value}</span>
+              </div>
+            ))}
           </div>
-        )}
 
-        <button
-          onClick={() => router.push("/security/dashboard")}
-          className="mt-8 w-full text-center text-sm font-medium text-slate-500 hover:text-blue-600"
-        >
-          View All Requests
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DetailItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
-  return (
-    <div className="flex items-start gap-4">
-      <div className="mt-1 p-2 bg-slate-50 rounded-lg text-slate-400">
-        {React.cloneElement(icon as React.ReactElement<any>, { 
-          className: "w-4 h-4" 
-        } as any)}
-      </div>
-      <div>
-        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</p>
-        <p className="font-semibold text-slate-900">{value}</p>
-      </div>
+          {/* Check-In Button */}
+          {request.status === "APPROVED" && (
+            <button
+              onClick={handleCheckIn}
+              disabled={checkingIn}
+              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-50"
+            >
+              {checkingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+              {checkingIn ? "Processing..." : "Confirm Check-In"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
