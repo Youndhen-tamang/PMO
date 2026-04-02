@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default function RootLayout({
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">S</span>
               </div>
-              <span className="font-bold text-xl tracking-tight">SM Visitor</span>
+              <Link href="/"><span className="font-bold text-xl tracking-tight">SM Visitor</span></Link>
             </div>
             <nav className="flex items-center gap-6">
               <a href="/request" className="text-sm font-medium hover:text-blue-600 transition-colors">Request Visit</a>
