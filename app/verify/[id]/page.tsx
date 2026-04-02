@@ -186,6 +186,7 @@ export default function VerificationPage() {
               ["Purpose", request.purpose],
               ["Person to Meet", request.personToMeet],
               ["Visit Date", new Date(request.visitDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })],
+              ["Visit Time", request.visitTime],
               ["Request ID", request.requestId],
             ].map(([label, value]) => (
               <div key={label} className="flex gap-2 text-sm">

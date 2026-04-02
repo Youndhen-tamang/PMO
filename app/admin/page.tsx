@@ -220,6 +220,7 @@ export default function AdminDashboard() {
                             ["Purpose", req.purpose],
                             ["Person to Meet", req.personToMeet],
                             ["Visit Date", new Date(req.visitDate).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })],
+                            ["Visit Time", req.visitTime],
                             ["Phone", req.phone],
                             ["Email", req.email],
                           ].map(([label, value]) => (

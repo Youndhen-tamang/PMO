@@ -88,9 +88,9 @@ export default function RequestSuccessPage() {
             <p className="font-semibold text-slate-900">{request?.name}</p>
           </div>
           <div className="p-4 text-left bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Date</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Date & Time</p>
             <p className="font-semibold text-slate-900">
-              {request?.visitDate && new Date(request.visitDate).toLocaleDateString()}
+              {request?.visitDate && new Date(request.visitDate).toLocaleDateString()} at {request?.visitTime || "N/A"}
             </p>
           </div>
         </div>

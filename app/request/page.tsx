@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import {
   Calendar, User, Building, MessageSquare, Phone, Mail,
-  Loader2, ArrowRight, Upload, X, FileImage, ChevronDown
+  Loader2, ArrowRight, Upload, X, FileImage, ChevronDown, Clock
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ const visitorSchema = z.object({
   visitDate: z.string().min(1, "Date is required"),
   phone: z.string().min(10, "Valid phone number is required"),
   email: z.string().email("Valid email is required"),
+  visitTime: z.string().min(1, "Visit time is required"),
 });
 
 type VisitorFormValues = z.infer<typeof visitorSchema>;
@@ -83,14 +84,18 @@ export default function VisitorRequestPage() {
         body: JSON.stringify({ ...data, documentUrl }),
       });
 
-      if (!response.ok) throw new Error("Failed to submit request");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.details || "Failed to submit request");
+      }
 
       const result = await response.json();
       toast.success("Request submitted successfully!");
       router.push(`/request/success/${result.requestId}`);
-    } catch (error) {
-      toast.error("Something went wrong. Please try again.");
-      console.error(error);
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : "Something went wrong. Please try again.";
+      toast.error(msg);
+      console.error("Submission error:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -186,6 +191,17 @@ export default function VisitorRequestPage() {
                 className={cn(inputClass, errors.visitDate && "border-red-500")} />
             </div>
             {errors.visitDate && <p className="text-xs text-red-500">{errors.visitDate.message}</p>}
+          </div>
+
+          {/* Preferred Time */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Preferred Time</label>
+            <div className="relative">
+              <Clock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input type="time" {...register("visitTime")}
+                className={cn(inputClass, errors.visitTime && "border-red-500")} />
+            </div>
+            {errors.visitTime && <p className="text-xs text-red-500">{errors.visitTime.message}</p>}
           </div>
 
           {/* Phone */}

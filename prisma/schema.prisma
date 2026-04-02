@@ -20,6 +20,7 @@ model VisitorRequest {
   email           String
   status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, CHECKED_IN, COMPLETED
   documentUrl     String?
+  visitTime       String?
   qrCode          String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

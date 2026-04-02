@@ -12,6 +12,7 @@ const visitorSchema = z.object({
   phone: z.string().min(10).max(15),
   email: z.string().email().max(100),
   documentUrl: z.string().optional(),
+  visitTime: z.string().optional(),
 });
 
 // Simple in-memory rate limiting (use Redis/database for production)
@@ -67,16 +68,26 @@ export async function POST(req: Request) {
         visitDate: new Date(validatedData.visitDate),
         status: "PENDING",
         documentUrl: validatedData.documentUrl ?? null,
+        visitTime: validatedData.visitTime ?? null,
       },
     });
 
     return NextResponse.json(request);
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
-    console.error("Request Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    
+    // Detailed error logging for deployment troubleshooting
+    console.error("DEBUG: Request processing failed");
+    console.error("Error Message:", error?.message);
+    console.error("Error Stack:", error?.stack);
+    if (error?.code) console.error("Prisma Error Code:", error.code);
+    
+    return NextResponse.json({ 
+      error: "Internal Server Error", 
+      details: error?.message 
+    }, { status: 500 });
   }
 }
 
